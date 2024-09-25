@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorteio de Times</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: auto;
+        }
+        input, textarea, button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .teams {
+            margin-top: 20px;
+        }
+        .team {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #000;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Sorteio de Times de Futebol</h1>
+    
+    <textarea id="names" rows="10" placeholder="Digite os nomes, um por linha"></textarea>
+    <input type="number" id="teamSize" placeholder="Quantidade de pessoas por time" min="1">
+    <button onclick="sortTeams()">Sortear Times</button>
+
+    <div id="result" class="teams"></div>
+</div>
+
+<script>
+function sortTeams() {
+    const namesInput = document.getElementById('names').value.trim();
+    const teamSize = parseInt(document.getElementById('teamSize').value);
+
+    if (!namesInput || isNaN(teamSize) || teamSize < 1) {
+        alert("Por favor, insira os nomes e a quantidade de pessoas por time.");
+        return;
+    }
+
+    let namesArray = namesInput.split('\n').map(name => name.trim()).filter(name => name);
+    if (namesArray.length < teamSize) {
+        alert("Nomes insuficientes para formar um time.");
+        return;
+    }
+
+    namesArray = shuffleArray(namesArray);
+    const teams = [];
+    while (namesArray.length) {
+        teams.push(namesArray.splice(0, teamSize));
+    }
+
+    displayTeams(teams);
+}
+
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function displayTeams(teams) {
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '';
+
+    teams.forEach((team, index) => {
+        const teamDiv = document.createElement('div');
+        teamDiv.classList.add('team');
+        teamDiv.innerHTML = `<h3>Time ${index + 1}</h3><p>${team.join(', ')}</p>`;
+        resultDiv.appendChild(teamDiv);
+    });
+}
+</script>
+
+</body>
+</html>
