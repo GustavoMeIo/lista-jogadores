@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmar Presença</title>
+    <!-- Firebase SDKs versão 8.x -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <!-- Carrega a configuração do Firebase -->
+    <script src="/static/firebase.js"></script>
+</head>
+
+<body>
+    <h1>Confirmar Presença para o Jogo</h1>
+
+    <p>Confirmando para o jogo da próxima quinta-feira.</p>
+    <label for="playerName">Nome:</label>
+    <input type="text" id="playerName" required>
+    <button onclick="confirmPresence()">Confirmar Presença</button>
+
+    <div id="confirmationMessage"></div>
+
+    <script>
+        // Função para calcular a próxima quinta-feira
+        function getNextThursday() {
+            const today = new Date();
+            const dayOfWeek = today.getDay(); // 0 = Domingo, 1 = Segunda, ..., 4 = Quinta
+            const daysUntilThursday = (4 - dayOfWeek + 7) % 7; // Calcula quantos dias faltam até quinta-feira
+            const nextThursday = new Date(today);
+            nextThursday.setDate(today.getDate() + daysUntilThursday);
+            return nextThursday.toISOString().split('T')[0]; // Retorna no formato YYYY-MM-DD
+        }
+
+        function confirmPresence() {
+            const playerName = document.getElementById('playerName').value;
+            const confirmationMessage = document.getElementById('confirmationMessage');
+            const gameDate = getNextThursday();  // Calcula a próxima quinta-feira
+
+            if (!playerName) {
+                alert("Por favor, insira seu nome.");
+                return;
+            }
+
+            const eventRef = firebase.database().ref('events').orderByChild('gameDate').equalTo(gameDate);
+
+            eventRef.once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    snapshot.forEach((eventSnapshot) => {
+                        const eventId = eventSnapshot.key;
+                        const confirmedPlayers = eventSnapshot.val().confirmedPlayers || [];
+
+                        if (!confirmedPlayers.includes(playerName)) {
+                            confirmedPlayers.push(playerName);
+                            firebase.database().ref('events/' + eventId + '/confirmedPlayers').set(confirmedPlayers)
+                                .then(() => {
+                                    confirmationMessage.innerText = "Presença confirmada para o jogo da próxima quinta-feira!";
+                                }).catch((error) => {
+                                    console.error("Erro ao confirmar presença:", error);
+                                });
+                        } else {
+                            alert("Você já confirmou sua presença.");
+                        }
+                    });
+                } else {
+                    // Caso não exista um evento para essa data, cria um novo evento
+                    const newEventRef = firebase.database().ref('events').push();
+                    newEventRef.set({
+                        gameDate: gameDate,
+                        confirmedPlayers: [playerName],
+                        teams: []
+                    }).then(() => {
+                        confirmationMessage.innerText = "Presença confirmada para o jogo da próxima quinta-feira!";
+                    }).catch((error) => {
+                        console.error("Erro ao criar evento:", error);
+                    });
+                }
+            }).catch((error) => {
+                console.error("Erro ao buscar jogadores:", error);
+            });
+        }
+    </script>
+</body>
+
+</html>

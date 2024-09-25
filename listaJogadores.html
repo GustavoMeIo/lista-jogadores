@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultar Presença</title>
+    <!-- Firebase SDKs versão 8.x -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <!-- Carrega a configuração do Firebase -->
+    <script src="/static/firebase.js"></script>
+</head>
+<body>
+    <h1>Consultar Presença Confirmada</h1>
+    
+    <label for="gameDate">Selecione a data do jogo:</label>
+    <input type="date" id="gameDate">
+    <button onclick="fetchPlayers()">Buscar Jogadores Confirmados</button>
+    
+    <h2>Jogadores Confirmados</h2>
+    <ul id="playerList"></ul>
+
+    <script>
+        function fetchPlayers() {
+            const gameDate = document.getElementById('gameDate').value;
+            const playerList = document.getElementById('playerList');
+            playerList.innerHTML = '';  // Limpar a lista
+
+            if (!gameDate) {
+                alert("Por favor, selecione uma data.");
+                return;
+            }
+
+            const eventRef = firebase.database().ref('events').orderByChild('gameDate').equalTo(gameDate);
+
+            eventRef.once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    snapshot.forEach((eventSnapshot) => {
+                        const players = eventSnapshot.val().confirmedPlayers || [];
+
+                        if (players.length > 0) {
+                            players.forEach((player) => {
+                                const li = document.createElement('li');
+                                li.textContent = player;
+                                playerList.appendChild(li);
+                            });
+                        } else {
+                            playerList.innerHTML = '<li>Nenhum jogador confirmou presença ainda.</li>';
+                        }
+                    });
+                } else {
+                    playerList.innerHTML = '<li>Nenhum evento encontrado para esta data.</li>';
+                }
+            }).catch((error) => {
+                console.error("Erro ao buscar jogadores:", error);
+            });
+        }
+    </script>
+</body>
+</html>
