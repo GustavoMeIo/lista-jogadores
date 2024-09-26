@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmar Presença</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Firebase SDKs versão 8.x -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <!-- Carrega a configuração do Firebase -->
+    <!-- <script src="/static/firebase.js"></script> -->
+    <script src="/lista-jogos/static/firebase.js"></script>
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Confirmar Presença para o Jogo</h1>
+
+        <div class="card p-4">
+            <p class="text-center">Confirmando para o jogo da próxima quinta-feira.</p>
+
+            <div class="form-group">
+                <label for="playerName">Nome:</label>
+                <input type="text" id="playerName" class="form-control" required>
+            </div>
+
+            <div class="text-center">
+                <button class="btn btn-primary" id="confirmButton" onclick="confirmPresence()">Confirmar
+                    Presença</button>
+                <button class="btn btn-secondary ml-2" onclick="window.location.href='index.html'">Voltar</button>
+            </div>
+
+            <!-- Spinner de carregamento oculto inicialmente -->
+            <div class="text-center mt-3" id="loadingSpinner" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">Carregando...</span>
+                </div>
+            </div>
+
+            <!-- Mensagem de confirmação -->
+            <div id="confirmationMessage" class="mt-3 text-center"></div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS e dependências -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        // Função para calcular a próxima quinta-feira
+        function getNextThursday() {
+            const today = new Date();
+            const dayOfWeek = today.getDay(); // 0 = Domingo, 1 = Segunda, ..., 4 = Quinta
+            const daysUntilThursday = (4 - dayOfWeek + 7) % 7; // Calcula quantos dias faltam até quinta-feira
+            const nextThursday = new Date(today);
+            nextThursday.setDate(today.getDate() + daysUntilThursday);
+            return nextThursday.toISOString().split('T')[0]; // Retorna no formato YYYY-MM-DD
+        }
+
+        function confirmPresence() {
+            const playerName = document.getElementById('playerName').value;
+            const confirmationMessage = document.getElementById('confirmationMessage');
+            const confirmButton = document.getElementById('confirmButton');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const gameDate = getNextThursday();  // Calcula a próxima quinta-feira
+
+            // Limpa a mensagem anterior
+            confirmationMessage.innerHTML = '';
+
+            if (!playerName) {
+                confirmationMessage.innerHTML = "<div class='alert alert-warning'>Por favor, insira seu nome.</div>";
+                return;
+            }
+
+            // Exibe o spinner e desabilita o botão
+            loadingSpinner.style.display = 'block';
+            confirmButton.disabled = true;
+
+            const eventRef = firebase.database().ref('events').orderByChild('gameDate').equalTo(gameDate);
+
+            eventRef.once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    snapshot.forEach((eventSnapshot) => {
+                        const eventId = eventSnapshot.key;
+                        const confirmedPlayers = eventSnapshot.val().confirmedPlayers || [];
+
+                        if (!confirmedPlayers.includes(playerName)) {
+                            confirmedPlayers.push(playerName);
+                            firebase.database().ref('events/' + eventId + '/confirmedPlayers').set(confirmedPlayers)
+                                .then(() => {
+                                    confirmationMessage.innerHTML = "<div class='alert alert-success'>Presença confirmada para o jogo da próxima quinta-feira!</div>";
+                                    // Limpa o campo de nome
+                                    document.getElementById('playerName').value = '';
+                                    // Esconde o spinner e reativa o botão
+                                    loadingSpinner.style.display = 'none';
+                                    confirmButton.disabled = false;
+                                }).catch((error) => {
+                                    console.error("Erro ao confirmar presença:", error);
+                                    confirmationMessage.innerHTML = "<div class='alert alert-danger'>Erro ao confirmar presença. Tente novamente.</div>";
+                                    loadingSpinner.style.display = 'none';
+                                    confirmButton.disabled = false;
+                                });
+                        } else {
+                            confirmationMessage.innerHTML = "<div class='alert alert-info'>Você já confirmou sua presença.</div>";
+                            loadingSpinner.style.display = 'none';
+                            confirmButton.disabled = false;
+                        }
+                    });
+                } else {
+                    // Caso não exista um evento para essa data, cria um novo evento
+                    const newEventRef = firebase.database().ref('events').push();
+                    newEventRef.set({
+                        gameDate: gameDate,
+                        confirmedPlayers: [playerName],
+                        teams: []
+                    }).then(() => {
+                        confirmationMessage.innerHTML = "<div class='alert alert-success'>Presença confirmada para o jogo da próxima quinta-feira!</div>";
+                        // Limpa o campo de nome
+                        document.getElementById('playerName').value = '';
+                        loadingSpinner.style.display = 'none';
+                        confirmButton.disabled = false;
+                    }).catch((error) => {
+                        console.error("Erro ao criar evento:", error);
+                        confirmationMessage.innerHTML = "<div class='alert alert-danger'>Erro ao confirmar presença. Tente novamente.</div>";
+                        loadingSpinner.style.display = 'none';
+                        confirmButton.disabled = false;
+                    });
+                }
+            }).catch((error) => {
+                console.error("Erro ao buscar jogadores:", error);
+                confirmationMessage.innerHTML = "<div class='alert alert-danger'>Erro ao buscar dados. Tente novamente.</div>";
+                loadingSpinner.style.display = 'none';
+                confirmButton.disabled = false;
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consultar Presença e Sortear Times</title>
+    <title>Consultar Presença e Atribuir Pontuação</title>
     <!-- Bootstrap CSS -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <!-- Firebase SDKs versão 8.x -->
@@ -13,11 +13,12 @@
     <!-- Carrega a configuração do Firebase -->
     <!-- <script src="/static/firebase.js"></script> -->
     <script src="/lista-jogos/static/firebase.js"></script>
+
 </head>
 
 <body>
     <div class="container mt-5">
-        <h1 class="text-center mb-4">Consultar Presença Confirmada e Sortear Times</h1>
+        <h1 class="text-center mb-4">Consultar Presença Confirmada e Atribuir Pontuação</h1>
 
         <div class="card p-4">
             <div class="form-group">
@@ -26,7 +27,6 @@
             </div>
             <div class="text-center">
                 <button class="btn btn-primary" onclick="fetchPlayers()">Buscar Jogadores Confirmados</button>
-                <button class="btn btn-success ml-2" onclick="sortTeams()">Sortear Times</button>
                 <button class="btn btn-secondary ml-2" onclick="window.location.href='index.html'">Voltar</button>
             </div>
 
@@ -40,17 +40,17 @@
             <h2 class="mt-4 text-center">Jogadores Confirmados</h2>
             <ul id="playerList" class="list-group"></ul>
 
-            <h2 class="mt-4 text-center">Sortear Times</h2>
-            <input type="number" id="teamSize" class="form-control" placeholder="Quantidade de pessoas por time"
-                min="1">
-            <div id="result" class="teams mt-3"></div>
+            <!-- Botão para salvar as pontuações -->
+            <div class="text-center mt-4">
+                <button class="btn btn-success" onclick="saveScores()">Salvar Pontuações</button>
+            </div>
         </div>
     </div>
 
     <!-- Bootstrap JS e dependências -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://stackpath.amazonaws.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
     <script>
         let confirmedPlayers = [];
@@ -72,7 +72,7 @@
             gameDateInput.value = getNextThursday();
         };
 
-        // Função para buscar jogadores confirmados e suas pontuações do Firebase
+        // Função para buscar jogadores confirmados e pontuações no Firebase
         function fetchPlayers() {
             const gameDate = document.getElementById('gameDate').value;
             const playerList = document.getElementById('playerList');
@@ -88,15 +88,17 @@
                 if (snapshot.exists()) {
                     snapshot.forEach((eventSnapshot) => {
                         confirmedPlayers = eventSnapshot.val().confirmedPlayers || [];
-                        playerScores = eventSnapshot.val().scores || {}; // Obter pontuações
+                        playerScores = eventSnapshot.val().scores || {}; // Obter pontuações da chave 'scores'
 
                         if (confirmedPlayers.length > 0) {
                             confirmedPlayers.forEach((player, index) => {
-                                const scoreData = playerScores[player];
+                                const scoreData = playerScores[player]; // Obtenha os dados de pontuação do jogador
                                 const score = scoreData ? scoreData.score : 0; // Usa a pontuação existente ou 0
                                 const li = document.createElement('li');
                                 li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                                li.innerHTML = `${index + 1}. ${player} - Pontuação: ${score}`;
+                                li.innerHTML = `${index + 1}. ${player} 
+                                    <input type="number" min="0" max="100" class="form-control w-25" id="score-${index}" value="${score}">
+                                    <span id="save-status-${index}" class="text-success ml-3" style="display: none;">✓ Salvo</span>`;
                                 playerList.appendChild(li);
                             });
                         } else {
@@ -113,89 +115,36 @@
             });
         }
 
-        // Função para sortear times balanceados com base nas pontuações e intervalos
-        function sortTeams() {
-            const teamSize = parseInt(document.getElementById('teamSize').value);
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = '';  // Limpar resultado anterior
+        // Função para salvar as pontuações no Firebase
+        function saveScores() {
+            const gameDate = document.getElementById('gameDate').value;
+            const updatedScores = confirmedPlayers.reduce((acc, player, index) => {
+                const scoreInput = document.getElementById(`score-${index}`).value;
+                acc[player] = { player, score: parseInt(scoreInput) }; // Salva jogador e pontuação
+                return acc;
+            }, {});
 
-            if (confirmedPlayers.length === 0) {
-                alert("Nenhum jogador confirmado para sortear.");
-                return;
-            }
+            const eventRef = firebase.database().ref('events').orderByChild('gameDate').equalTo(gameDate);
 
-            if (isNaN(teamSize) || teamSize < 1) {
-                alert("Por favor, insira uma quantidade válida de pessoas por time.");
-                return;
-            }
-
-            // Verificar se há jogadores suficientes
-            if (confirmedPlayers.length < teamSize) {
-                alert("Nomes insuficientes para formar um time.");
-                return;
-            }
-
-            // Ordenar jogadores por pontuação
-            const sortedPlayers = confirmedPlayers
-                .map(player => ({
-                    player,
-                    score: playerScores[player]?.score || 0
-                }))
-                .sort((a, b) => b.score - a.score); // Ordenar do maior para o menor
-
-            // Separar jogadores em intervalos de pontuação
-            const intervals = [
-                { min: 90, max: 100, players: [] },
-                { min: 80, max: 89, players: [] },
-                { min: 60, max: 79, players: [] },
-                { min: 0, max: 59, players: [] }
-            ];
-
-            sortedPlayers.forEach(player => {
-                for (const interval of intervals) {
-                    if (player.score >= interval.min && player.score <= interval.max) {
-                        interval.players.push(player);
-                        break;
-                    }
+            eventRef.once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    snapshot.forEach((eventSnapshot) => {
+                        const eventId = eventSnapshot.key;
+                        // Atualizar a pontuação dos jogadores no Firebase
+                        firebase.database().ref(`events/${eventId}/scores`).set(updatedScores)
+                            .then(() => {
+                                // Exibir status de sucesso para cada jogador
+                                confirmedPlayers.forEach((player, index) => {
+                                    document.getElementById(`save-status-${index}`).style.display = 'inline'; // Exibe o ícone ✓
+                                });
+                            }).catch((error) => {
+                                console.error("Erro ao salvar pontuações:", error);
+                            });
+                    });
                 }
-            });
-
-            const teams = Array.from({ length: Math.ceil(confirmedPlayers.length / teamSize) }, () => []); // Criar arrays vazios para os times
-
-            // Distribuir jogadores por intervalos nos times
-            intervals.forEach(interval => {
-                let reverse = false;
-                while (interval.players.length) {
-                    for (let i = 0; i < teams.length && interval.players.length; i++) {
-                        const teamIndex = reverse ? teams.length - 1 - i : i;
-                        if (teams[teamIndex].length < teamSize) {
-                            teams[teamIndex].push(interval.players.shift());
-                        }
-                    }
-                    reverse = !reverse; // Alterna a distribuição para balancear
-                }
-            });
-
-            displayTeams(teams);
-        }
-
-        // Exibe os times sorteados
-        function displayTeams(teams) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = '';
-
-            teams.forEach((team, index) => {
-                const teamDiv = document.createElement('div');
-                teamDiv.classList.add('team');
-                teamDiv.classList.add('card');
-                teamDiv.classList.add('p-3');
-                teamDiv.classList.add('mb-3');
-                teamDiv.innerHTML = `<h3>Time ${index + 1}</h3><p>${team.map(t => `${t.player} (Pontuação: ${t.score})`).join(', ')}</p>`;
-                resultDiv.appendChild(teamDiv);
             });
         }
     </script>
-
 </body>
 
 </html>
